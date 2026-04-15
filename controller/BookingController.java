@@ -1,10 +1,16 @@
 package controller;
 
 import model.Booking;
+import model.Payment;
 import model.Show;
 import singleton.BookingManager;
+import singleton.PaymentManager;
 import singleton.SeatAllocator;
 import view.BookingView;
+import enums.PaymentMethod;
+import notification.EmailNotification;
+import notification.SMSNotification;
+import notification.InAppNotification;
 
 import java.util.List;
 
@@ -23,12 +29,14 @@ public class BookingController {
     // MVC: Controller holds reference to View and uses Model via BookingManager
     private BookingView bookingView;
     private BookingManager bookingManager;
+    private PaymentManager paymentManager;
     private SeatAllocator seatAllocator;
 
     public BookingController() {
         this.bookingView = new BookingView();
         this.bookingManager = BookingManager.getInstance(); // Singleton
-        this.seatAllocator = SeatAllocator.getInstance();   // Singleton
+        this.paymentManager = PaymentManager.getInstance();  // Singleton
+        this.seatAllocator = SeatAllocator.getInstance();    // Singleton
     }
 
     /**
@@ -108,5 +116,91 @@ public class BookingController {
         } else {
             bookingView.displayBookingConfirmation(booking);
         }
+    }
+
+    /**
+     * Process payment for a booking (Adapter Pattern).
+     * Creates a payment and processes it using the selected payment gateway.
+     */
+    public Payment processPayment(int bookingId, PaymentMethod method, String accountDetails) {
+        System.out.println("\n[BookingController] Processing payment for Booking #" + bookingId);
+
+        Booking booking = bookingManager.getBooking(bookingId);
+        if (booking == null) {
+            bookingView.displayError("Booking #" + bookingId + " not found.");
+            return null;
+        }
+
+        // Create payment
+        Payment payment = paymentManager.createPayment(booking.getTotalAmount(), method, bookingId);
+
+        // Process payment using Adapter Pattern
+        boolean success = paymentManager.processPayment(payment.getPaymentId(), accountDetails);
+
+        if (success) {
+            bookingView.displaySuccess("Payment of Rs. " + payment.getAmount() + " processed successfully!");
+            bookingView.displaySuccess("Payment ID: " + payment.getPaymentId() + " | Status: " + payment.getStatus());
+            return payment;
+        } else {
+            bookingView.displayError("Payment processing failed. Please try again with different account details.");
+            return null;
+        }
+    }
+
+    /**
+     * Refund payment for a cancelled booking.
+     */
+    public boolean refundPayment(int bookingId, int paymentId, String transactionId) {
+        System.out.println("\n[BookingController] Processing refund for Booking #" + bookingId);
+
+        boolean success = paymentManager.refundPayment(paymentId, transactionId);
+
+        if (success) {
+            Payment payment = paymentManager.getPayment(paymentId);
+            if (payment != null) {
+                bookingView.displaySuccess("Refund of Rs. " + payment.getAmount() + " processed successfully!");
+                bookingView.displaySuccess("Payment ID: " + paymentId + " | Status: " + payment.getStatus());
+            }
+        } else {
+            bookingView.displayError("Refund processing failed.");
+        }
+
+        return success;
+    }
+
+    /**
+     * Subscribe a customer to notifications (Observer Pattern).
+     * Adds observers for different notification types.
+     */
+    public void subscribeToNotifications(String email, String phone, String userId) {
+        System.out.println("\n[BookingController] Subscribing to notifications...");
+        
+        // Get the NotificationManager from BookingManager
+        var notificationManager = bookingManager.getNotificationManager();
+
+        // Add Email Notification Observer
+        notificationManager.subscribe(new EmailNotification(email));
+
+        // Add SMS Notification Observer
+        notificationManager.subscribe(new SMSNotification(phone));
+
+        // Add In-App Notification Observer
+        notificationManager.subscribe(new InAppNotification(userId));
+
+        notificationManager.displayActiveObservers();
+    }
+
+    /**
+     * Display all processed payments.
+     */
+    public void viewAllPayments() {
+        paymentManager.displayAllPayments();
+    }
+
+    /**
+     * Display all bookings.
+     */
+    public void viewAllBookings() {
+        bookingManager.displayAllBookings();
     }
 }
