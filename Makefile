@@ -1,6 +1,3 @@
-SHELL := powershell.exe
-.SHELLFLAGS := -NoProfile -ExecutionPolicy Bypass -Command
-
 JAVAC ?= javac
 JAVA ?= java
 MVN ?= mvn
@@ -18,9 +15,8 @@ run: build
 	$(JAVA) Main
 
 clean:
-	Get-ChildItem -Path . -Recurse -Filter *.class | Remove-Item -Force
-	if (Test-Path target) { Remove-Item -Recurse -Force target }
-	if (Test-Path out) { Remove-Item -Recurse -Force out }
+	find . -type f -name '*.class' -exec rm -f {} \;
+	rm -rf target out
 
 maven-build:
 	$(MVN) -DskipTests clean package
