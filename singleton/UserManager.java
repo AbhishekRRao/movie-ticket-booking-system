@@ -41,7 +41,7 @@ public class UserManager {
 
     public User registerCustomer(String name, String email, String password) {
         String normalizedEmail = normalizeEmail(email);
-        if (normalizedEmail.isEmpty() || password == null || password.isBlank() || name == null || name.isBlank()) {
+        if (normalizedEmail.isEmpty() || password == null || password.isEmpty() || name == null || name.isEmpty()) {
             return null;
         }
         if (usersByEmail.containsKey(normalizedEmail)) {
