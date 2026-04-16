@@ -1,9 +1,12 @@
 package singleton;
 
 import model.Movie;
+import model.Show;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Stores and searches movie records.
@@ -13,9 +16,12 @@ public class MovieCatalog {
     private static volatile MovieCatalog instance;
 
     private final List<Movie> movies;
+    private final Map<Integer, Show> shows; // Store for admin show management
+    private int nextShowId = 100;
 
     private MovieCatalog() {
         this.movies = new ArrayList<>();
+        this.shows = new HashMap<>();
         seedMovies();
     }
 
@@ -61,6 +67,56 @@ public class MovieCatalog {
             }
         }
         return results;
+    }
+
+    // ===== Admin CRUD operations =====
+    public Movie getMovieById(int movieId) {
+        for (Movie m : movies) {
+            if (m.getMovieId() == movieId) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+    public void addMovie(Movie movie) {
+        movies.add(movie);
+    }
+
+    public void updateMovie(Movie movie) {
+        for (int i = 0; i < movies.size(); i++) {
+            if (movies.get(i).getMovieId() == movie.getMovieId()) {
+                movies.set(i, movie);
+                return;
+            }
+        }
+    }
+
+    public void deleteMovie(int movieId) {
+        movies.removeIf(m -> m.getMovieId() == movieId);
+    }
+
+    public Show getShowById(int showId) {
+        return shows.get(showId);
+    }
+
+    public void addShow(Show show) {
+        if (show.getShowId() == 0) {
+            show.setShowId(nextShowId++);
+        }
+        shows.put(show.getShowId(), show);
+    }
+
+    public void updateShow(Show show) {
+        shows.put(show.getShowId(), show);
+    }
+
+    public void deleteShow(int showId) {
+        shows.remove(showId);
+    }
+
+    public List<Show> getAllShows() {
+        return new ArrayList<>(shows.values());
     }
 
     private String normalize(String value) {

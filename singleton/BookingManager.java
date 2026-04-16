@@ -180,4 +180,11 @@ public class BookingManager {
         }
         System.out.println("=================================");
     }
+
+    /**
+     * Get total number of bookings.
+     */
+    public int getTotalBookings() {
+        return bookingStore.size();
+    }
 }

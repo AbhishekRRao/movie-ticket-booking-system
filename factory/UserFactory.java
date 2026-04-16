@@ -14,9 +14,13 @@ public final class UserFactory {
     }
 
     public static User createUser(UserType userType, int userId, String name, String email, String password) {
-        return switch (userType) {
-            case CUSTOMER -> new CustomerUser(userId, name, email, password);
-            case ADMIN -> new AdminUser(userId, name, email, password);
-        };
+        switch (userType) {
+            case CUSTOMER:
+                return new CustomerUser(userId, name, email, password);
+            case ADMIN:
+                return new AdminUser(userId, name, email, password);
+            default:
+                return null;
+        }
     }
 }

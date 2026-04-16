@@ -11,6 +11,7 @@ import enums.PaymentMethod;
 import notification.EmailNotification;
 import notification.SMSNotification;
 import notification.InAppNotification;
+import notification.NotificationManager;
 
 import java.util.List;
 
@@ -176,7 +177,7 @@ public class BookingController {
         System.out.println("\n[BookingController] Subscribing to notifications...");
         
         // Get the NotificationManager from BookingManager
-        var notificationManager = bookingManager.getNotificationManager();
+        NotificationManager notificationManager = bookingManager.getNotificationManager();
 
         // Add Email Notification Observer
         notificationManager.subscribe(new EmailNotification(email));
