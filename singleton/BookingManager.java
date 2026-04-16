@@ -4,6 +4,7 @@ import model.Booking;
 import model.Seat;
 import model.Show;
 import enums.BookingStatus;
+import notification.NotificationManager;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,6 +34,7 @@ public class BookingManager {
     // Dependencies (Singletons)
     private DBConnection dbConnection;
     private SeatAllocator seatAllocator;
+    private NotificationManager notificationManager;
 
     // Private constructor
     private BookingManager() {
@@ -40,6 +42,7 @@ public class BookingManager {
         this.bookingCounter = 1000; // Booking IDs start from 1000
         this.dbConnection = DBConnection.getInstance();
         this.seatAllocator = SeatAllocator.getInstance();
+        this.notificationManager = new NotificationManager();
         System.out.println("[BookingManager] Initialized successfully.");
     }
 
@@ -111,6 +114,10 @@ public class BookingManager {
         booking.confirmBooking();
         dbConnection.save("CONFIRMED: " + booking.toString());
         System.out.println("[BookingManager] Booking CONFIRMED: " + booking);
+
+        // Notify all observers (Observer Pattern)
+        notificationManager.notifyBookingConfirmed(booking);
+
         return true;
     }
 
@@ -123,6 +130,10 @@ public class BookingManager {
             System.out.println("[BookingManager] Booking ID " + bookingId + " not found.");
             return false;
         }
+
+        // Notify all observers (Observer Pattern)
+        notificationManager.notifyBookingCancelled(booking);
+
 
         booking.cancelBooking(); // Also releases all seats inside
         dbConnection.save("CANCELLED: " + booking.toString());
@@ -148,5 +159,25 @@ public class BookingManager {
             }
         }
         return result;
+    }
+
+    /**
+     * Get the NotificationManager for subscribing observers.
+     */
+    public NotificationManager getNotificationManager() {
+        return notificationManager;
+    }
+
+    /**
+     * Display all bookings in the store.
+     */
+    public void displayAllBookings() {
+        System.out.println("\n========== All Bookings ==========");
+        if (bookingStore.isEmpty()) {
+            System.out.println("No bookings found.");
+        } else {
+            bookingStore.values().forEach(System.out::println);
+        }
+        System.out.println("=================================");
     }
 }
