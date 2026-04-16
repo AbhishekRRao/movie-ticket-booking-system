@@ -1,3 +1,4 @@
 ./Documents
 ./out
-./Main.class
+*.class
+README.md
