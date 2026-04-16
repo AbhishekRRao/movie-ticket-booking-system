@@ -1,3 +1,5 @@
+import admin.AdminController;
+import admin.AdminService;
 import controller.BookingController;
 import controller.UserController;
 import java.util.Arrays;
@@ -10,6 +12,8 @@ import model.Show;
 import model.User;
 import singleton.BookingManager;
 import singleton.DBConnection;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /**
  * MAIN - Interactive Entry Point for Movie Ticket Booking System
@@ -26,8 +30,10 @@ public class Main {
     static Scanner scanner = new Scanner(System.in);
     static BookingController controller = new BookingController();
     static UserController userController = new UserController();
+    static AdminController adminController = new AdminController();
     static Show show = createDefaultShow();
     static User loggedInUser = null;
+    static boolean adminLoggedIn = false;
 
     public static void main(String[] args) {
 
@@ -41,21 +47,45 @@ public class Main {
             String input = scanner.nextLine().trim();
 
             switch (input) {
-                case "1" -> register();
-                case "2" -> login();
-                case "3" -> browseMovies();
-                case "4" -> searchMovies();
-                case "5" -> viewAvailableSeats();
-                case "6" -> bookTicket();
-                case "7" -> confirmBooking();
-                case "8" -> cancelBooking();
-                case "9" -> viewBooking();
-                case "10" -> verifySingleton();
-                case "11" -> {
+                case "1":
+                    register();
+                    break;
+                case "2":
+                    login();
+                    break;
+                case "3":
+                    browseMovies();
+                    break;
+                case "4":
+                    searchMovies();
+                    break;
+                case "5":
+                    viewAvailableSeats();
+                    break;
+                case "6":
+                    bookTicket();
+                    break;
+                case "7":
+                    confirmBooking();
+                    break;
+                case "8":
+                    cancelBooking();
+                    break;
+                case "9":
+                    viewBooking();
+                    break;
+                case "10":
+                    verifySingleton();
+                    break;
+                case "11":
+                    adminLogin();
+                    break;
+                case "12":
                     System.out.println("\nThank you for using Movie Ticket Booking System. Goodbye!");
                     running = false;
-                }
-                default -> System.out.println("\n[!] Invalid choice. Please enter 1-11.\n");
+                    break;
+                default:
+                    System.out.println("\n[!] Invalid choice. Please enter 1-12.\n");
             }
         }
 
@@ -75,9 +105,12 @@ public class Main {
         System.out.println("  8. Cancel Booking");
         System.out.println("  9. View Booking Details");
         System.out.println("  10. Verify Singleton Pattern");
-        System.out.println("  11. Exit");
+        System.out.println("  11. Admin Login");
+        System.out.println("  12. Exit");
         System.out.println("----------------------------------------------");
-        if (loggedInUser == null) {
+        if (adminLoggedIn) {
+            System.out.println("  Current User: ADMIN (logged in)");
+        } else if (loggedInUser == null) {
             System.out.println("  Current User: Not logged in");
         } else {
             System.out.println("  Current User: " + loggedInUser.getName() + " (" + loggedInUser.getUserType() + ")");
@@ -243,6 +276,163 @@ public class Main {
         System.out.println("  Same instance? " + (db1 == db2));
 
         System.out.println("\n  Singleton confirmed: Only ONE instance exists for each manager.");
+    }
+
+    // ADMIN LOGIN
+    static void adminLogin() {
+        System.out.println("\n--- ADMIN LOGIN ---");
+        System.out.print("Enter admin username: ");
+        String username = scanner.nextLine().trim();
+
+        System.out.print("Enter admin password: ");
+        String password = scanner.nextLine().trim();
+
+        // Simple admin credentials (hardcoded for demo)
+        if ("admin".equals(username) && "admin123".equals(password)) {
+            adminLoggedIn = true;
+            System.out.println("\n[SUCCESS] Admin login successful!");
+            adminMenu();
+        } else {
+            System.out.println("\n[ERROR] Invalid admin credentials!");
+            adminLoggedIn = false;
+        }
+    }
+
+    // ADMIN MENU
+    static void adminMenu() {
+        if (!adminLoggedIn) {
+            System.out.println("[ERROR] Access denied. Admin not logged in.");
+            return;
+        }
+
+        AdminService adminService = AdminService.getInstance();
+        boolean inAdminMode = true;
+
+        while (inAdminMode && adminLoggedIn) {
+            System.out.println("\n========== ADMIN MENU ==========");
+            System.out.println("  1. Add Movie");
+            System.out.println("  2. Update Movie");
+            System.out.println("  3. Delete Movie");
+            System.out.println("  4. Add Show");
+            System.out.println("  5. Update Show");
+            System.out.println("  6. Delete Show");
+            System.out.println("  7. Generate Booking Report");
+            System.out.println("  8. Logout");
+            System.out.println("================================");
+            System.out.print("Enter choice: ");
+            String choice = scanner.nextLine().trim();
+
+            switch (choice) {
+                case "1":
+                    System.out.println("\n--- ADD MOVIE ---");
+                    System.out.print("Movie title: ");
+                    String title = scanner.nextLine().trim();
+                    System.out.print("Genre: ");
+                    String genre = scanner.nextLine().trim();
+                    System.out.print("Language: ");
+                    String language = scanner.nextLine().trim();
+                    System.out.print("Duration (in minutes): ");
+                    double duration = parseDouble(scanner.nextLine().trim(), 120);
+                    System.out.print("Director: ");
+                    String director = scanner.nextLine().trim();
+                    System.out.print("Cast: ");
+                    String cast = scanner.nextLine().trim();
+                    System.out.print("Rating (0-10): ");
+                    double rating = parseDouble(scanner.nextLine().trim(), 8.0);
+
+                    adminController.handleAddMovie(title, genre, language, duration, director, cast,
+                            LocalDate.now(), "New movie added by admin", rating);
+                    System.out.println("[SUCCESS] Movie added!");
+                    break;
+
+                case "2":
+                    System.out.println("\n--- UPDATE MOVIE ---");
+                    System.out.print("Movie ID: ");
+                    int updateMovieId = parseInt(scanner.nextLine().trim(), 1);
+                    System.out.print("New title (or press Enter to skip): ");
+                    String newTitle = scanner.nextLine().trim();
+                    System.out.print("New rating (0-10, or press Enter to skip): ");
+                    String ratingInput = scanner.nextLine().trim();
+                    double newRating = ratingInput.isEmpty() ? 8.0 : parseDouble(ratingInput, 8.0);
+                    adminController.handleUpdateMovie(updateMovieId, newTitle.isEmpty() ? "Updated Movie" : newTitle, newRating);
+                    System.out.println("[SUCCESS] Movie updated!");
+                    break;
+
+                case "3":
+                    System.out.println("\n--- DELETE MOVIE ---");
+                    System.out.print("Movie ID: ");
+                    int deleteMovieId = parseInt(scanner.nextLine().trim(), 1);
+                    adminController.handleDeleteMovie(deleteMovieId);
+                    System.out.println("[SUCCESS] Movie deleted!");
+                    break;
+
+                case "4":
+                    System.out.println("\n--- ADD SHOW ---");
+                    System.out.print("Movie ID: ");
+                    int movieId = parseInt(scanner.nextLine().trim(), 1);
+                    System.out.print("Auditorium (e.g., Hall A): ");
+                    String auditorium = scanner.nextLine().trim();
+                    System.out.print("Total seats: ");
+                    int totalSeats = parseInt(scanner.nextLine().trim(), 150);
+                    System.out.print("Base price: ");
+                    double basePrice = parseDouble(scanner.nextLine().trim(), 350.0);
+
+                    adminController.handleAddShow(movieId, LocalDateTime.now().plusDays(1), 
+                            auditorium, totalSeats, basePrice, "English", "2D");
+                    System.out.println("[SUCCESS] Show added!");
+                    break;
+
+                case "5":
+                    System.out.println("\n--- UPDATE SHOW PRICE ---");
+                    System.out.print("Show ID: ");
+                    int showId = parseInt(scanner.nextLine().trim(), 1);
+                    System.out.print("New price: ");
+                    double newShowPrice = parseDouble(scanner.nextLine().trim(), 350.0);
+                    adminController.handleUpdateShow(showId, newShowPrice);
+                    System.out.println("[SUCCESS] Show updated!");
+                    break;
+
+                case "6":
+                    System.out.println("\n--- DELETE SHOW ---");
+                    System.out.print("Show ID: ");
+                    int deleteShowId = parseInt(scanner.nextLine().trim(), 1);
+                    adminController.handleDeleteShow(deleteShowId);
+                    System.out.println("[SUCCESS] Show deleted!");
+                    break;
+
+                case "7":
+                    System.out.println("\n--- GENERATE REPORT ---");
+                    adminService.generateBookingReport(LocalDate.now().minusDays(30), LocalDate.now());
+                    break;
+
+                case "8":
+                    adminLoggedIn = false;
+                    inAdminMode = false;
+                    System.out.println("\n[SUCCESS] Admin logged out!");
+                    break;
+
+                default:
+                    System.out.println("\n[!] Invalid choice.");
+            }
+        }
+    }
+
+    // Helper method to parse integer
+    static int parseInt(String value, int defaultValue) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    // Helper method to parse double
+    static double parseDouble(String value, double defaultValue) {
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 
     // SETUP: Default Show with Seats
