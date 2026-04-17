@@ -6,12 +6,16 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
 import enums.UserType;
+import enums.PaymentMethod;
 import model.Booking;
+import model.Payment;
 import model.Seat;
 import model.Show;
 import model.User;
 import singleton.BookingManager;
 import singleton.DBConnection;
+import singleton.PaymentManager;
+import payment.PaymentProcessor;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -37,7 +41,7 @@ public class Main {
 
     public static void main(String[] args) {
 
-        System.out.println("   MOVIE TICKET BOOKING SYSTEM - Member 2    ");
+        System.out.println("   MOVIE TICKET BOOKING SYSTEM   ");
 
         boolean running = true;
 
@@ -66,26 +70,29 @@ public class Main {
                     bookTicket();
                     break;
                 case "7":
-                    confirmBooking();
+                    makePayment();
                     break;
                 case "8":
-                    cancelBooking();
+                    confirmBooking();
                     break;
                 case "9":
-                    viewBooking();
+                    cancelBooking();
                     break;
                 case "10":
-                    verifySingleton();
+                    viewBooking();
                     break;
                 case "11":
-                    adminLogin();
+                    verifySingleton();
                     break;
                 case "12":
+                    adminLogin();
+                    break;
+                case "13":
                     System.out.println("\nThank you for using Movie Ticket Booking System. Goodbye!");
                     running = false;
                     break;
                 default:
-                    System.out.println("\n[!] Invalid choice. Please enter 1-12.\n");
+                    System.out.println("\n[!] Invalid choice. Please enter 1-13.\n");
             }
         }
 
@@ -101,12 +108,13 @@ public class Main {
         System.out.println("  4. Search Movies");
         System.out.println("  5. View Available Seats");
         System.out.println("  6. Book Ticket (requires customer login)");
-        System.out.println("  7. Confirm Booking (after payment)");
-        System.out.println("  8. Cancel Booking");
-        System.out.println("  9. View Booking Details");
-        System.out.println("  10. Verify Singleton Pattern");
-        System.out.println("  11. Admin Login");
-        System.out.println("  12. Exit");
+        System.out.println("  7. Make Payment (after booking)");
+        System.out.println("  8. Confirm Booking (after payment)");
+        System.out.println("  9. Cancel Booking");
+        System.out.println("  10. View Booking Details");
+        System.out.println("  11. Verify Singleton Pattern");
+        System.out.println("  12. Admin Login");
+        System.out.println("  13. Exit");
         System.out.println("----------------------------------------------");
         if (adminLoggedIn) {
             System.out.println("  Current User: ADMIN (logged in)");
@@ -223,7 +231,79 @@ public class Main {
         }
     }
 
-    // OPTION 3: Confirm Booking
+    // OPTION 7: Make Payment
+    static void makePayment() {
+        System.out.println("\n--- MAKE PAYMENT ---");
+        System.out.print("Enter Booking ID: ");
+        try {
+            int bookingId = Integer.parseInt(scanner.nextLine().trim());
+            
+            // Get the booking
+            Booking booking = BookingManager.getInstance().getBooking(bookingId);
+            if (booking == null) {
+                System.out.println("[!] Booking not found.");
+                return;
+            }
+            
+            // Check if booking is still pending
+            if (!booking.getStatus().toString().equals("PENDING")) {
+                System.out.println("[!] Booking is not in PENDING status. Current status: " + booking.getStatus());
+                return;
+            }
+            
+            // Calculate and display total
+            double totalAmount = booking.calculateTotal();
+            System.out.println("\n[INFO] Booking Amount: Rs." + totalAmount);
+            
+            // Display available payment methods
+            PaymentProcessor.displayPaymentMethods();
+            System.out.print("Select payment method (1-5): ");
+            int choice = parseInt(scanner.nextLine().trim(), 1);
+            
+            if (choice < 1 || choice > 5) {
+                System.out.println("[!] Invalid payment method selection.");
+                return;
+            }
+            
+            PaymentMethod[] methods = PaymentMethod.values();
+            PaymentMethod method = methods[choice - 1];
+            
+            // Create payment record
+            PaymentManager paymentManager = PaymentManager.getInstance();
+            Payment payment = paymentManager.createPayment(totalAmount, method, bookingId);
+            
+            // Get payment details
+            System.out.print("Enter payment details (card/UPI/account number): ");
+            String details = scanner.nextLine().trim();
+            
+            if (details.isEmpty()) {
+                System.out.println("[!] Payment details cannot be empty.");
+                return;
+            }
+            
+            // Process payment
+            System.out.println("\n[Processing payment...]\n");
+            boolean success = paymentManager.processPayment(payment.getPaymentId(), details);
+            
+            if (success) {
+                System.out.println("\n[SUCCESS] Payment completed successfully!");
+                System.out.println("[INFO] Payment ID: " + payment.getPaymentId());
+                System.out.println("[INFO] Amount: Rs." + totalAmount);
+                System.out.println("[INFO] Method: " + method);
+                System.out.println("[INFO] Status: SUCCESS");
+                System.out.println("[INFO] Now you can confirm your booking.");
+            } else {
+                System.out.println("\n[ERROR] Payment failed. Please try again or use a different payment method.");
+                System.out.println("[INFO] Payment ID: " + payment.getPaymentId());
+                System.out.println("[INFO] Status: FAILED");
+            }
+            
+        } catch (NumberFormatException e) {
+            System.out.println("[!] Invalid Booking ID or payment method selection.");
+        }
+    }
+
+    // OPTION 8: Confirm Booking
     static void confirmBooking() {
         System.out.println("\n--- CONFIRM BOOKING ---");
         System.out.print("Enter Booking ID to confirm: ");
