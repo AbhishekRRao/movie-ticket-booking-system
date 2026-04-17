@@ -1,6 +1,9 @@
 package admin.report;
 
 import java.time.LocalDate;
+import singleton.MovieCatalog;
+import model.Show;
+import java.util.List;
 
 /**
  * TEMPLATE METHOD PATTERN - Show Report Generator
@@ -24,11 +27,21 @@ public class ShowReportGenerator extends ReportGenerator {
     @Override
     protected void processData() {
         System.out.println("[SHOW] Processing show data...");
-        // Simulate fetching show data
-        totalShows = 150; // Simulated
-        occupiedSeats = 8500; // Simulated
-        totalSeats = 10000; // Simulated
-        System.out.println("[SHOW] Show Data Fetched");
+        // Fetch real show data from MovieCatalog
+        MovieCatalog catalog = MovieCatalog.getInstance();
+        List<Show> shows = catalog.getAllShows();
+        
+        totalShows = shows.size();
+        totalSeats = 0;
+        occupiedSeats = 0;
+        
+        for (Show show : shows) {
+            totalSeats += show.getTotalSeats();
+            int occupied = show.getTotalSeats() - show.getAvailableSeatsCount();
+            occupiedSeats += occupied;
+        }
+        
+        System.out.println("[SHOW] Show Data Fetched: " + totalShows + " shows found");
     }
     
     @Override

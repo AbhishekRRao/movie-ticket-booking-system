@@ -187,4 +187,11 @@ public class BookingManager {
     public int getTotalBookings() {
         return bookingStore.size();
     }
+
+    /**
+     * Get all bookings (for reporting purposes).
+     */
+    public java.util.Collection<Booking> getAllBookings() {
+        return bookingStore.values();
+    }
 }
