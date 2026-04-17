@@ -397,7 +397,8 @@ public class Main {
             System.out.println("  5. Update Show");
             System.out.println("  6. Delete Show");
             System.out.println("  7. Generate Booking Report");
-            System.out.println("  8. Logout");
+            System.out.println("  8. View All Shows");
+            System.out.println("  9. Logout");
             System.out.println("================================");
             System.out.print("Enter choice: ");
             String choice = scanner.nextLine().trim();
@@ -486,6 +487,11 @@ public class Main {
                     break;
 
                 case "8":
+                    System.out.println("\n--- VIEW ALL SHOWS ---");
+                    adminController.handleViewAllShows();
+                    break;
+
+                case "9":
                     adminLoggedIn = false;
                     inAdminMode = false;
                     System.out.println("\n[SUCCESS] Admin logged out!");

@@ -175,4 +175,34 @@ public class AdminService {
     public void clearHistory() {
         commandExecutor.clearHistory();
     }
+    
+    // ============ VIEW OPERATIONS ============
+    
+    /**
+     * Get all scheduled shows
+     */
+    public java.util.List<Show> getAllShows() {
+        return movieCatalog.getAllShows();
+    }
+    
+    /**
+     * Display all shows with details
+     */
+    public void displayAllShows() {
+        java.util.List<Show> shows = movieCatalog.getAllShows();
+        System.out.println("\n========== ALL SCHEDULED SHOWS ==========");
+        if (shows.isEmpty()) {
+            System.out.println("No shows scheduled yet.");
+        } else {
+            for (Show show : shows) {
+                System.out.println("Show ID: " + show.getShowId() + 
+                    " | Movie: " + (show.getMovie() != null ? show.getMovie().getTitle() : "N/A") +
+                    " | Time: " + show.getShowTimeDateTime() + 
+                    " | Auditorium: " + show.getAuditorium() +
+                    " | Seats: " + show.getAvailableSeatsCount() + "/" + show.getTotalSeats() +
+                    " | Price: Rs." + show.getBasePrice());
+            }
+        }
+        System.out.println("==========================================");
+    }
 }

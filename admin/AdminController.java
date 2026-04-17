@@ -142,7 +142,6 @@ public class AdminController {
             }
             
             ShowBuilder builder = new ShowBuilder()
-                    .setShowId((int)(Math.random() * 10000))
                     .setMovie(movie)
                     .setShowTime(showTime)
                     .setAuditorium(auditorium)
@@ -246,5 +245,18 @@ public class AdminController {
      */
     public void handleRedo() {
         adminService.redoLastOperation();
+    }
+    
+    // ============ VIEW OPERATIONS ============
+    
+    /**
+     * Handle view all shows request
+     */
+    public void handleViewAllShows() {
+        try {
+            adminService.displayAllShows();
+        } catch (Exception e) {
+            adminView.displayError("Error viewing shows: " + e.getMessage());
+        }
     }
 }

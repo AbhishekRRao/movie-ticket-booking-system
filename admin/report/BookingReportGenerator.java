@@ -1,8 +1,11 @@
 package admin.report;
 
 import singleton.BookingManager;
+import model.Booking;
+import enums.BookingStatus;
 import java.time.LocalDate;
 import java.util.Map;
+import java.util.HashMap;
 
 /**
  * TEMPLATE METHOD PATTERN - Booking Report Generator
@@ -26,19 +29,42 @@ public class BookingReportGenerator extends ReportGenerator {
     @Override
     protected void processData() {
         System.out.println("[BOOKING] Processing booking data...");
-        // Fetch bookings from BookingManager
-        totalBookings = BookingManager.getInstance().getTotalBookings();
-        successfulBookings = (int) (totalBookings * 0.85); // Simulated
-        cancelledBookings = totalBookings - successfulBookings;
+        
+        // Fetch real bookings from BookingManager
+        BookingManager manager = BookingManager.getInstance();
+        totalBookings = manager.getTotalBookings();
+        
+        // Initialize counters
+        successfulBookings = 0;
+        cancelledBookings = 0;
+        totalRevenue = 0.0;
+        
+        // Iterate through all bookings and count by status
+        for (Booking booking : manager.getAllBookings()) {
+            if (booking.getStatus() == BookingStatus.CONFIRMED) {
+                successfulBookings++;
+                totalRevenue += booking.getTotalAmount();
+                System.out.println("[BOOKING] Confirmed booking found: Rs." + booking.getTotalAmount());
+            } else if (booking.getStatus() == BookingStatus.CANCELLED) {
+                cancelledBookings++;
+                System.out.println("[BOOKING] Cancelled booking found");
+            } else if (booking.getStatus() == BookingStatus.PENDING) {
+                System.out.println("[BOOKING] Pending booking found (not counted in stats)");
+            }
+        }
+        
         System.out.println("[BOOKING] Total Bookings: " + totalBookings);
+        System.out.println("[BOOKING] Successful: " + successfulBookings + " | Cancelled: " + cancelledBookings);
     }
     
     @Override
     protected void calculateStatistics() {
         System.out.println("[BOOKING] Calculating booking statistics...");
-        double avgBookingValue = totalRevenue / (successfulBookings > 0 ? successfulBookings : 1);
+        double successRate = totalBookings > 0 ? (successfulBookings * 100.0 / totalBookings) : 0.0;
+        double avgBookingValue = successfulBookings > 0 ? (totalRevenue / successfulBookings) : 0.0;
+        
         System.out.println("[BOOKING] Avg Booking Value: " + String.format("%.2f", avgBookingValue));
-        System.out.println("[BOOKING] Success Rate: " + String.format("%.2f", (successfulBookings * 100.0 / totalBookings)) + "%");
+        System.out.println("[BOOKING] Success Rate: " + String.format("%.2f", successRate) + "%");
     }
     
     @Override
