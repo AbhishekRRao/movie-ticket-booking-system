@@ -49,6 +49,9 @@ public class Payment {
     public PaymentMethod getMethod() { return method; }
     public int getBookingId() { return bookingId; }
 
+    public void setPaymentDate(Date paymentDate) { this.paymentDate = paymentDate; }
+    public void setStatus(PaymentStatus status) { this.status = status; }
+
     @Override
     public String toString() {
         return "Payment[ID:" + paymentId + " | Amount:Rs." + amount +

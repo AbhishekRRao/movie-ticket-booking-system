@@ -3,6 +3,8 @@ package singleton;
 import model.Seat;
 import model.Show;
 import enums.SeatStatus;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 
 /**
  * SeatAllocator - Handles ALL seat allocation logic.
@@ -15,9 +17,12 @@ import enums.SeatStatus;
 public class SeatAllocator {
 
     private static volatile SeatAllocator instance = null;
+    private final DBConnection dbConnection;
 
     // Private constructor - Singleton
-    private SeatAllocator() {}
+    private SeatAllocator() {
+        this.dbConnection = DBConnection.getInstance();
+    }
 
     public static SeatAllocator getInstance() {
         if (instance == null) {
@@ -64,6 +69,7 @@ public class SeatAllocator {
 
         // Reserve the seat
         seat.setStatus(SeatStatus.RESERVED);
+        updateSeatStatus(show.getShowId(), seat.getSeatNumber(), SeatStatus.RESERVED);
         System.out.println("[SeatAllocator] Seat " + seatNumber + " reserved successfully.");
         return seat;
     }
@@ -82,5 +88,29 @@ public class SeatAllocator {
     public void releaseSeat(Seat seat) {
         seat.releaseSeat();
         System.out.println("[SeatAllocator] Seat " + seat.getSeatNumber() + " released back to AVAILABLE.");
+    }
+
+    public void confirmSeat(Show show, Seat seat) {
+        seat.bookSeat();
+        updateSeatStatus(show.getShowId(), seat.getSeatNumber(), SeatStatus.BOOKED);
+        System.out.println("[SeatAllocator] Seat " + seat.getSeatNumber() + " confirmed as BOOKED.");
+    }
+
+    public void releaseSeat(Show show, Seat seat) {
+        seat.releaseSeat();
+        updateSeatStatus(show.getShowId(), seat.getSeatNumber(), SeatStatus.AVAILABLE);
+        System.out.println("[SeatAllocator] Seat " + seat.getSeatNumber() + " released back to AVAILABLE.");
+    }
+
+    private void updateSeatStatus(int showId, String seatNumber, SeatStatus status) {
+        String sql = "UPDATE seats SET status = ? WHERE show_id = ? AND seat_number = ?";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql)) {
+            ps.setString(1, status.name());
+            ps.setInt(2, showId);
+            ps.setString(3, seatNumber);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to update seat status", e);
+        }
     }
 }

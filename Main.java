@@ -15,6 +15,7 @@ import model.User;
 import singleton.BookingManager;
 import singleton.DBConnection;
 import singleton.PaymentManager;
+import singleton.MovieCatalog;
 import payment.PaymentProcessor;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -523,12 +524,25 @@ public class Main {
 
     // SETUP: Default Show with Seats
     static Show createDefaultShow() {
-        Show s = new Show(1, "7:00 PM", "2026-04-20");
-        s.addSeat(new Seat(1, "A1", "REGULAR", 150.0));
-        s.addSeat(new Seat(2, "A2", "REGULAR", 150.0));
-        s.addSeat(new Seat(3, "B1", "VIP",     350.0));
-        s.addSeat(new Seat(4, "B2", "VIP",     350.0));
-        s.addSeat(new Seat(5, "C1", "PREMIUM", 500.0));
-        return s;
+        MovieCatalog catalog = MovieCatalog.getInstance();
+        Show existing = catalog.getShowById(1);
+        if (existing != null) {
+            return existing;
+        }
+
+        Show seeded = new Show(1, "7:00 PM", "2026-04-20");
+        seeded.addSeat(new Seat(1, "A1", "REGULAR", 150.0));
+        seeded.addSeat(new Seat(2, "A2", "REGULAR", 150.0));
+        seeded.addSeat(new Seat(3, "B1", "VIP", 350.0));
+        seeded.addSeat(new Seat(4, "B2", "VIP", 350.0));
+        seeded.addSeat(new Seat(5, "C1", "PREMIUM", 500.0));
+        seeded.setTotalSeats(5);
+        seeded.setAvailableSeats(5);
+        seeded.setBasePrice(150.0);
+        seeded.setLanguage("English");
+        seeded.setFormat("2D");
+        seeded.setActive(true);
+        catalog.addShow(seeded);
+        return seeded;
     }
 }

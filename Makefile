@@ -1,25 +1,27 @@
-JAVAC ?= javac
-JAVA ?= java
 MVN ?= mvn
 
-SOURCES = Main.java controller/*.java enums/*.java factory/*.java model/*.java singleton/*.java view/*.java notification/*.java admin/*.java admin/builder/*.java admin/command/*.java admin/state/*.java admin/report/*.java
-
-.PHONY: all build run clean maven-build maven-clean
+.PHONY: all build run test package clean verify db-check
 
 all: build
 
 build:
-	$(JAVAC) $(SOURCES)
+	$(MVN) -q -DskipTests clean compile
 
-run: build
-	$(JAVA) Main
+run:
+	$(MVN) -q -DskipTests exec:java
+
+test:
+	$(MVN) -q test
+
+package:
+	$(MVN) -q -DskipTests package
+
+verify:
+	$(MVN) -q -DskipTests verify
+
+db-check:
+	@powershell -NoProfile -Command "if (Test-Path movie_ticket_booking.db) { Write-Output 'SQLite DB found: movie_ticket_booking.db' } else { Write-Output 'SQLite DB not found yet. Run: make run' }"
 
 clean:
-	find . -type f -name '*.class' -exec rm -f {} \;
-	rm -rf target out
-
-maven-build:
-	$(MVN) -DskipTests clean package
-
-maven-clean:
-	$(MVN) clean
+	$(MVN) -q clean
+	@powershell -NoProfile -Command "if (Test-Path movie_ticket_booking.db) { Remove-Item movie_ticket_booking.db -Force }"

@@ -4,8 +4,6 @@ import singleton.BookingManager;
 import model.Booking;
 import enums.BookingStatus;
 import java.time.LocalDate;
-import java.util.Map;
-import java.util.HashMap;
 
 /**
  * TEMPLATE METHOD PATTERN - Booking Report Generator

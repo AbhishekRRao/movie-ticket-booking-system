@@ -4,12 +4,15 @@ import model.Booking;
 import model.Seat;
 import model.Show;
 import enums.BookingStatus;
+import enums.SeatStatus;
 import notification.NotificationManager;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Collection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 
 /**
  * SINGLETON PATTERN - BookingManager
@@ -27,22 +30,20 @@ public class BookingManager {
     // Single instance
     private static volatile BookingManager instance = null;
 
-    // In-memory store (simulates DB)
-    private Map<Integer, Booking> bookingStore;
     private int bookingCounter;
 
     // Dependencies (Singletons)
-    private DBConnection dbConnection;
-    private SeatAllocator seatAllocator;
-    private NotificationManager notificationManager;
+    private final DBConnection dbConnection;
+    private final SeatAllocator seatAllocator;
+    private final NotificationManager notificationManager;
 
     // Private constructor
     private BookingManager() {
-        this.bookingStore = new HashMap<>();
-        this.bookingCounter = 1000; // Booking IDs start from 1000
+        this.bookingCounter = 1000;
         this.dbConnection = DBConnection.getInstance();
         this.seatAllocator = SeatAllocator.getInstance();
         this.notificationManager = new NotificationManager();
+        this.bookingCounter = loadMaxBookingId();
         System.out.println("[BookingManager] Initialized successfully.");
     }
 
@@ -85,8 +86,9 @@ public class BookingManager {
         booking.calculateTotal();
 
         // Save to store and DB
-        bookingStore.put(bookingId, booking);
-        dbConnection.save(booking.toString());
+        saveBooking(booking, show.getShowId());
+        saveBookingSeats(booking, show.getShowId());
+        dbConnection.save("BOOKING_CREATED: " + bookingId);
 
         System.out.println("[BookingManager] Booking created: " + booking);
         return booking;
@@ -96,7 +98,7 @@ public class BookingManager {
      * Confirm a pending booking (after payment).
      */
     public boolean confirmBooking(int bookingId) {
-        Booking booking = bookingStore.get(bookingId);
+        Booking booking = getBooking(bookingId);
         if (booking == null) {
             System.out.println("[BookingManager] Booking ID " + bookingId + " not found.");
             return false;
@@ -106,13 +108,21 @@ public class BookingManager {
             return false;
         }
 
+        Integer showId = getShowIdForBooking(bookingId);
+        Show show = showId != null ? MovieCatalog.getInstance().getShowById(showId) : null;
+
         // Confirm all seats
         for (Seat seat : booking.getBookedSeats()) {
-            seatAllocator.confirmSeat(seat);
+            if (show != null) {
+                seatAllocator.confirmSeat(show, seat);
+            } else {
+                seat.setStatus(SeatStatus.BOOKED);
+            }
         }
 
         booking.confirmBooking();
-        dbConnection.save("CONFIRMED: " + booking.toString());
+        updateBookingStatus(bookingId, BookingStatus.CONFIRMED);
+        dbConnection.save("BOOKING_CONFIRMED: " + bookingId);
         System.out.println("[BookingManager] Booking CONFIRMED: " + booking);
 
         // Notify all observers (Observer Pattern)
@@ -125,18 +135,27 @@ public class BookingManager {
      * Cancel an existing booking and release seats.
      */
     public boolean cancelBooking(int bookingId) {
-        Booking booking = bookingStore.get(bookingId);
+        Booking booking = getBooking(bookingId);
         if (booking == null) {
             System.out.println("[BookingManager] Booking ID " + bookingId + " not found.");
             return false;
         }
 
+        Integer showId = getShowIdForBooking(bookingId);
+        Show show = showId != null ? MovieCatalog.getInstance().getShowById(showId) : null;
+
+        if (show != null) {
+            for (Seat seat : booking.getBookedSeats()) {
+                seatAllocator.releaseSeat(show, seat);
+            }
+        }
+
         // Notify all observers (Observer Pattern)
         notificationManager.notifyBookingCancelled(booking);
 
-
-        booking.cancelBooking(); // Also releases all seats inside
-        dbConnection.save("CANCELLED: " + booking.toString());
+        booking.cancelBooking();
+        updateBookingStatus(bookingId, BookingStatus.CANCELLED);
+        dbConnection.save("BOOKING_CANCELLED: " + bookingId);
         System.out.println("[BookingManager] Booking CANCELLED: " + booking);
         return true;
     }
@@ -145,7 +164,26 @@ public class BookingManager {
      * Retrieve a booking by ID.
      */
     public Booking getBooking(int bookingId) {
-        return bookingStore.get(bookingId);
+        String sql = "SELECT booking_id, customer_id, booking_date, total_amount, status FROM bookings WHERE booking_id = ?";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql)) {
+            ps.setInt(1, bookingId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+                Booking booking = new Booking(
+                        rs.getInt("booking_id"),
+                        rs.getInt("customer_id"),
+                        rs.getString("booking_date")
+                );
+                booking.setTotalAmount(rs.getDouble("total_amount"));
+                booking.setStatus(BookingStatus.valueOf(rs.getString("status")));
+                loadBookingSeats(booking);
+                return booking;
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to fetch booking " + bookingId, e);
+        }
     }
 
     /**
@@ -153,10 +191,19 @@ public class BookingManager {
      */
     public List<Booking> getBookingsByCustomer(int customerId) {
         List<Booking> result = new ArrayList<>();
-        for (Booking b : bookingStore.values()) {
-            if (b.getCustomerId() == customerId) {
-                result.add(b);
+        String sql = "SELECT booking_id FROM bookings WHERE customer_id = ? ORDER BY booking_id";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql)) {
+            ps.setInt(1, customerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Booking booking = getBooking(rs.getInt("booking_id"));
+                    if (booking != null) {
+                        result.add(booking);
+                    }
+                }
             }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to fetch customer bookings", e);
         }
         return result;
     }
@@ -173,10 +220,11 @@ public class BookingManager {
      */
     public void displayAllBookings() {
         System.out.println("\n========== All Bookings ==========");
-        if (bookingStore.isEmpty()) {
+        Collection<Booking> bookings = getAllBookings();
+        if (bookings.isEmpty()) {
             System.out.println("No bookings found.");
         } else {
-            bookingStore.values().forEach(System.out::println);
+            bookings.forEach(System.out::println);
         }
         System.out.println("=================================");
     }
@@ -185,13 +233,129 @@ public class BookingManager {
      * Get total number of bookings.
      */
     public int getTotalBookings() {
-        return bookingStore.size();
+        String sql = "SELECT COUNT(*) AS total FROM bookings";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            return rs.next() ? rs.getInt("total") : 0;
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to count bookings", e);
+        }
     }
 
     /**
      * Get all bookings (for reporting purposes).
      */
     public java.util.Collection<Booking> getAllBookings() {
-        return bookingStore.values();
+        List<Booking> bookings = new ArrayList<>();
+        String sql = "SELECT booking_id FROM bookings ORDER BY booking_id";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                Booking booking = getBooking(rs.getInt("booking_id"));
+                if (booking != null) {
+                    bookings.add(booking);
+                }
+            }
+            return bookings;
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to fetch all bookings", e);
+        }
+    }
+
+    private int loadMaxBookingId() {
+        String sql = "SELECT COALESCE(MAX(booking_id), 1000) AS max_id FROM bookings";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            return rs.next() ? rs.getInt("max_id") : 1000;
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to initialize booking counter", e);
+        }
+    }
+
+    private void saveBooking(Booking booking, int showId) {
+        String sql = "INSERT OR REPLACE INTO bookings(booking_id, customer_id, booking_date, total_amount, status, show_id) VALUES(?, ?, ?, ?, ?, ?)";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql)) {
+            ps.setInt(1, booking.getBookingId());
+            ps.setInt(2, booking.getCustomerId());
+            ps.setString(3, booking.getBookingDate());
+            ps.setDouble(4, booking.getTotalAmount());
+            ps.setString(5, booking.getStatus().name());
+            ps.setInt(6, showId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to save booking", e);
+        }
+    }
+
+    private void saveBookingSeats(Booking booking, int showId) {
+        String sql = "INSERT OR REPLACE INTO booking_seats(booking_id, show_id, seat_number, seat_id, seat_type, price) VALUES(?, ?, ?, ?, ?, ?)";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql)) {
+            for (Seat seat : booking.getBookedSeats()) {
+                ps.setInt(1, booking.getBookingId());
+                ps.setInt(2, showId);
+                ps.setString(3, seat.getSeatNumber());
+                ps.setInt(4, seat.getSeatId());
+                ps.setString(5, seat.getType());
+                ps.setDouble(6, seat.getPrice());
+                ps.addBatch();
+            }
+            ps.executeBatch();
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to save booking seats", e);
+        }
+    }
+
+    private void loadBookingSeats(Booking booking) {
+        String sql = "SELECT bs.seat_id, bs.seat_number, bs.seat_type, bs.price, s.status "
+                + "FROM booking_seats bs "
+                + "LEFT JOIN seats s ON s.show_id = bs.show_id AND s.seat_number = bs.seat_number "
+                + "WHERE bs.booking_id = ? ORDER BY bs.seat_number";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql)) {
+            ps.setInt(1, booking.getBookingId());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Seat seat = new Seat(
+                            rs.getInt("seat_id"),
+                            rs.getString("seat_number"),
+                            rs.getString("seat_type"),
+                            rs.getDouble("price")
+                    );
+                    String status = rs.getString("status");
+                    if (status != null) {
+                        seat.setStatus(SeatStatus.valueOf(status));
+                    }
+                    booking.addSeat(seat);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to load booking seats", e);
+        }
+    }
+
+    private Integer getShowIdForBooking(int bookingId) {
+        String sql = "SELECT show_id FROM bookings WHERE booking_id = ?";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql)) {
+            ps.setInt(1, bookingId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    int showId = rs.getInt("show_id");
+                    return rs.wasNull() ? null : showId;
+                }
+            }
+            return null;
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to fetch show for booking", e);
+        }
+    }
+
+    private void updateBookingStatus(int bookingId, BookingStatus status) {
+        String sql = "UPDATE bookings SET status = ? WHERE booking_id = ?";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql)) {
+            ps.setString(1, status.name());
+            ps.setInt(2, bookingId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to update booking status", e);
+        }
     }
 }

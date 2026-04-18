@@ -8,6 +8,10 @@ import payment.PaymentProcessor;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Date;
 
 /**
  * SINGLETON PATTERN - PaymentManager
@@ -26,11 +30,14 @@ public class PaymentManager {
     // In-memory store (simulates DB)
     private Map<Integer, Payment> paymentStore;
     private int paymentCounter;
+    private final DBConnection dbConnection;
 
     // Private constructor
     private PaymentManager() {
         this.paymentStore = new HashMap<>();
-        this.paymentCounter = 5000; // Payment IDs start from 5000
+        this.dbConnection = DBConnection.getInstance();
+        this.paymentCounter = loadMaxPaymentId();
+        loadPayments();
         System.out.println("[PaymentManager] Initialized successfully.");
     }
 
@@ -56,6 +63,7 @@ public class PaymentManager {
     public Payment createPayment(double amount, PaymentMethod method, int bookingId) {
         Payment payment = new Payment(++paymentCounter, amount, method, bookingId);
         paymentStore.put(payment.getPaymentId(), payment);
+        persistPayment(payment);
         System.out.println("[PaymentManager] Created " + payment);
         return payment;
     }
@@ -89,9 +97,11 @@ public class PaymentManager {
 
         if (success) {
             payment.processPayment();
+            updatePaymentStatus(payment.getPaymentId(), PaymentStatus.SUCCESS);
             System.out.println("[PaymentManager] Payment processed successfully: " + payment);
         } else {
             payment.failPayment();
+            updatePaymentStatus(payment.getPaymentId(), PaymentStatus.FAILED);
             System.out.println("[PaymentManager] Payment failed: " + payment);
         }
 
@@ -127,6 +137,7 @@ public class PaymentManager {
 
         if (success) {
             payment.refund();
+            updatePaymentStatus(payment.getPaymentId(), PaymentStatus.REFUNDED);
             System.out.println("[PaymentManager] Refund processed successfully: " + payment);
         } else {
             System.out.println("[PaymentManager] Refund failed");
@@ -141,7 +152,31 @@ public class PaymentManager {
      * @return The Payment object or null
      */
     public Payment getPayment(int paymentId) {
-        return paymentStore.get(paymentId);
+        Payment payment = paymentStore.get(paymentId);
+        if (payment != null) {
+            return payment;
+        }
+        String sql = "SELECT payment_id, amount, payment_date, status, method, booking_id FROM payments WHERE payment_id = ?";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql)) {
+            ps.setInt(1, paymentId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+                Payment loaded = new Payment(
+                        rs.getInt("payment_id"),
+                        rs.getDouble("amount"),
+                        PaymentMethod.valueOf(rs.getString("method")),
+                        rs.getInt("booking_id")
+                );
+                loaded.setPaymentDate(new Date(rs.getLong("payment_date")));
+                loaded.setStatus(PaymentStatus.valueOf(rs.getString("status")));
+                paymentStore.put(loaded.getPaymentId(), loaded);
+                return loaded;
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to fetch payment " + paymentId, e);
+        }
     }
 
     /**
@@ -155,5 +190,61 @@ public class PaymentManager {
             paymentStore.values().forEach(System.out::println);
         }
         System.out.println("==================================");
+    }
+
+    private int loadMaxPaymentId() {
+        String sql = "SELECT COALESCE(MAX(payment_id), 5000) AS max_id FROM payments";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            return rs.next() ? rs.getInt("max_id") : 5000;
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to initialize payment counter", e);
+        }
+    }
+
+    private void loadPayments() {
+        String sql = "SELECT payment_id, amount, payment_date, status, method, booking_id FROM payments";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                Payment payment = new Payment(
+                        rs.getInt("payment_id"),
+                        rs.getDouble("amount"),
+                        PaymentMethod.valueOf(rs.getString("method")),
+                        rs.getInt("booking_id")
+                );
+                payment.setPaymentDate(new Date(rs.getLong("payment_date")));
+                payment.setStatus(PaymentStatus.valueOf(rs.getString("status")));
+                paymentStore.put(payment.getPaymentId(), payment);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to load payments", e);
+        }
+    }
+
+    private void persistPayment(Payment payment) {
+        String sql = "INSERT OR REPLACE INTO payments(payment_id, amount, payment_date, status, method, booking_id) VALUES(?, ?, ?, ?, ?, ?)";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql)) {
+            ps.setInt(1, payment.getPaymentId());
+            ps.setDouble(2, payment.getAmount());
+            ps.setLong(3, payment.getPaymentDate().getTime());
+            ps.setString(4, payment.getStatus().name());
+            ps.setString(5, payment.getMethod().name());
+            ps.setInt(6, payment.getBookingId());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to save payment", e);
+        }
+    }
+
+    private void updatePaymentStatus(int paymentId, PaymentStatus status) {
+        String sql = "UPDATE payments SET status = ? WHERE payment_id = ?";
+        try (PreparedStatement ps = dbConnection.getConnection().prepareStatement(sql)) {
+            ps.setString(1, status.name());
+            ps.setInt(2, paymentId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to update payment status", e);
+        }
     }
 }

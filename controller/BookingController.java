@@ -3,14 +3,8 @@ package controller;
 import model.Booking;
 import model.Payment;
 import model.Show;
-import singleton.BookingManager;
-import singleton.PaymentManager;
-import singleton.SeatAllocator;
 import view.BookingView;
 import enums.PaymentMethod;
-import notification.EmailNotification;
-import notification.SMSNotification;
-import notification.InAppNotification;
 import notification.NotificationManager;
 
 import java.util.List;
@@ -29,15 +23,11 @@ public class BookingController {
 
     // MVC: Controller holds reference to View and uses Model via BookingManager
     private BookingView bookingView;
-    private BookingManager bookingManager;
-    private PaymentManager paymentManager;
-    private SeatAllocator seatAllocator;
+    private BookingService bookingService;
 
     public BookingController() {
         this.bookingView = new BookingView();
-        this.bookingManager = BookingManager.getInstance(); // Singleton
-        this.paymentManager = PaymentManager.getInstance();  // Singleton
-        this.seatAllocator = SeatAllocator.getInstance();    // Singleton
+        this.bookingService = new BookingService();
     }
 
     /**
@@ -64,14 +54,14 @@ public class BookingController {
 
         // Check seat availability before creating booking
         for (String seatNumber : seatNumbers) {
-            if (!seatAllocator.isSeatAvailable(show, seatNumber)) {
+            if (!bookingService.isSeatAvailable(show, seatNumber)) {
                 bookingView.displayError("Seat " + seatNumber + " is not available. Booking aborted.");
                 return null;
             }
         }
 
         // Create booking via BookingManager (Singleton)
-        Booking booking = bookingManager.createBooking(customerId, show, seatNumbers, date);
+        Booking booking = bookingService.createBooking(customerId, show, seatNumbers, date);
 
         if (booking == null) {
             bookingView.displayError("Booking could not be created. Please try again.");
@@ -88,9 +78,9 @@ public class BookingController {
      */
     public void confirmBooking(int bookingId) {
         System.out.println("\n[BookingController] Confirming Booking #" + bookingId);
-        boolean success = bookingManager.confirmBooking(bookingId);
+        boolean success = bookingService.confirmBooking(bookingId);
         if (success) {
-            Booking booking = bookingManager.getBooking(bookingId);
+            Booking booking = bookingService.getBooking(bookingId);
             bookingView.displayBookingConfirmation(booking);
             bookingView.displaySuccess("Booking #" + bookingId + " is now CONFIRMED!");
         } else {
@@ -103,7 +93,7 @@ public class BookingController {
      */
     public void cancelBooking(int bookingId) {
         System.out.println("\n[BookingController] Cancelling Booking #" + bookingId);
-        boolean success = bookingManager.cancelBooking(bookingId);
+        boolean success = bookingService.cancelBooking(bookingId);
         bookingView.displayCancellationMessage(bookingId, success);
     }
 
@@ -111,7 +101,7 @@ public class BookingController {
      * View booking details by ID.
      */
     public void viewBooking(int bookingId) {
-        Booking booking = bookingManager.getBooking(bookingId);
+        Booking booking = bookingService.getBooking(bookingId);
         if (booking == null) {
             bookingView.displayError("Booking #" + bookingId + " not found.");
         } else {
@@ -126,17 +116,17 @@ public class BookingController {
     public Payment processPayment(int bookingId, PaymentMethod method, String accountDetails) {
         System.out.println("\n[BookingController] Processing payment for Booking #" + bookingId);
 
-        Booking booking = bookingManager.getBooking(bookingId);
+        Booking booking = bookingService.getBooking(bookingId);
         if (booking == null) {
             bookingView.displayError("Booking #" + bookingId + " not found.");
             return null;
         }
 
         // Create payment
-        Payment payment = paymentManager.createPayment(booking.getTotalAmount(), method, bookingId);
+        Payment payment = bookingService.createPayment(booking.getTotalAmount(), method, bookingId);
 
         // Process payment using Adapter Pattern
-        boolean success = paymentManager.processPayment(payment.getPaymentId(), accountDetails);
+        boolean success = bookingService.processPayment(payment.getPaymentId(), accountDetails);
 
         if (success) {
             bookingView.displaySuccess("Payment of Rs. " + payment.getAmount() + " processed successfully!");
@@ -154,10 +144,10 @@ public class BookingController {
     public boolean refundPayment(int bookingId, int paymentId, String transactionId) {
         System.out.println("\n[BookingController] Processing refund for Booking #" + bookingId);
 
-        boolean success = paymentManager.refundPayment(paymentId, transactionId);
+        boolean success = bookingService.refundPayment(paymentId, transactionId);
 
         if (success) {
-            Payment payment = paymentManager.getPayment(paymentId);
+            Payment payment = bookingService.getPayment(paymentId);
             if (payment != null) {
                 bookingView.displaySuccess("Refund of Rs. " + payment.getAmount() + " processed successfully!");
                 bookingView.displaySuccess("Payment ID: " + paymentId + " | Status: " + payment.getStatus());
@@ -175,18 +165,9 @@ public class BookingController {
      */
     public void subscribeToNotifications(String email, String phone, String userId) {
         System.out.println("\n[BookingController] Subscribing to notifications...");
-        
-        // Get the NotificationManager from BookingManager
-        NotificationManager notificationManager = bookingManager.getNotificationManager();
+        bookingService.subscribeToNotifications(email, phone, userId);
 
-        // Add Email Notification Observer
-        notificationManager.subscribe(new EmailNotification(email));
-
-        // Add SMS Notification Observer
-        notificationManager.subscribe(new SMSNotification(phone));
-
-        // Add In-App Notification Observer
-        notificationManager.subscribe(new InAppNotification(userId));
+        NotificationManager notificationManager = bookingService.getNotificationManager();
 
         notificationManager.displayActiveObservers();
     }
@@ -195,13 +176,13 @@ public class BookingController {
      * Display all processed payments.
      */
     public void viewAllPayments() {
-        paymentManager.displayAllPayments();
+        bookingService.displayAllPayments();
     }
 
     /**
      * Display all bookings.
      */
     public void viewAllBookings() {
-        bookingManager.displayAllBookings();
+        bookingService.displayAllBookings();
     }
 }

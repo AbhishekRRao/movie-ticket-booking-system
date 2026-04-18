@@ -61,6 +61,9 @@ public class Booking {
     public int getCustomerId() { return customerId; }
     public List<Seat> getBookedSeats() { return bookedSeats; }
 
+    public void setTotalAmount(double totalAmount) { this.totalAmount = totalAmount; }
+    public void setStatus(BookingStatus status) { this.status = status; }
+
     @Override
     public String toString() {
         return "Booking[ID:" + bookingId + " | Customer:" + customerId +
